@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Books</title>
+  <script src="https://cdn.jsdelivr.net/npm/vue@2.7/dist/vue.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
+</head>
+<body>
+  <header class="bg-dark text-white p-3">
+    <div class="d-flex justify-content-between">
+      <h1 class="h3">Dashboard</h1>
+      <ul class="nav nav-pills">
+        <li id="id1" class="nav-item"></li>
+        <li id="id2" class="nav-item"></li>
+        <li class="nav-item">
+          <a class="nav-link" href="/">Logout</a>
+        </li>
+      </ul>
+    </div>
+  </header>
+
+  <div class="container mt-3">
+    <div class="row">
+      <div class="col-md-8">
+        <form id="filterForm">
+          <div class="input-group mb-3">
+            <input class="form-control" type="text" id="keyword" name="keyword" required>
+            <button type="submit" class="btn btn-outline-dark">Add Filter</button>
+            <button id="removeFilters" type="button" class="btn btn-outline-danger">Remove Filters</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div id="app" class="container mt-3">
+    <h2 class="mb-3">Requested</h2>
+    <table id="myTable" class="table table-striped">
+      <thead>
+        <tr>
+          <th scope="col">Book Title</th>
+          <th scope="col">Author</th>
+          <th scope="col">Section</th>
+          <th scope="col">Cancel</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr id="obj" v-for="book in bre" :key="book.ID">
+          <td>${ book.Name }</td>
+          <td>${ book.Author }</td>
+          <td>${ book.SID }</td>
+          <td><button @click="deleteData(id, book.ID)" class="btn btn-primary btn-sm">Cancel</button></td>
+        </tr>
+      </tbody>
+    </table>
+    <h2 class="mb-3">Current</h2>
+    <table id="myTable" class="table table-striped">
+      <thead>
+        <tr>
+          <th scope="col">Book Title</th>
+          <th scope="col">Author</th>
+          <th scope="col">Section</th>
+          <th scope="col">Date of Issue</th>
+          <th scope="col">Date of Return</th>
+          <th scope="col">Read</th>
+          <th scope="col">Return</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr id="obj" v-for="book in bcu" :key="book.ID">
+          <td>${ book.Name1 }</td>
+          <td>${ book.Author }</td>
+          <td>${ book.Name2 }</td>
+          <td>${ book.DOI }</td>
+          <td>${ book.DOR }</td>
+          <td><a href="#" class="btn btn-primary btn-sm">Read</a></td>
+          <td><button @click="putData(id, book.ID, 'Completed')" class="btn btn-primary btn-sm">Return</button></td>
+        </tr>
+      </tbody>
+    </table>
+    <h2 class="mb-3">Completed</h2>
+    <table id="myTable" class="table table-striped">
+      <thead>
+        <tr>
+          <th scope="col">Book Title</th>
+          <th scope="col">Author</th>
+          <th scope="col">Section</th>
+          <th scope="col">Request</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr id="obj" v-for="book in bco" :key="book.ID">
+          <td>${ book.Name }</td>
+          <td>${ book.Author }</td>
+          <td>${ book.SID }</td>
+          <td><button @click="putData(id, book.ID, 'Requested')" class="btn btn-primary btn-sm">Request</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <script type="text/javascript" src="{{url_for('static',filename='Filter.js')}}"></script>
+  <script type="text/javascript" src="{{url_for('static',filename='My_Books.js')}}"></script>
+</body>
+</html>
