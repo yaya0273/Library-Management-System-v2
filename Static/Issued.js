@@ -32,6 +32,9 @@ var app=new Vue({
                 .catch(error => {
                   console.error('Error:', error);
                 });
+        },
+        Download(){
+            window.location.href='/admin/download'
         }
     }
     }
