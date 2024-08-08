@@ -1,4 +1,5 @@
 #Libraries
+
 from flask import Flask
 from flask import render_template
 from flask import redirect
@@ -8,6 +9,7 @@ from jinja2 import Template
 from datetime import date,timedelta,datetime
 from flask_restful import Api, Resource,reqparse
 from flask_caching import Cache
+from flask_redis import FlaskRedis
 import workers
 from workers import celery
 from celery.schedules import crontab
@@ -19,10 +21,11 @@ from email.mime.multipart import MIMEMultipart
 #Configuration
 
 app=Flask(__name__,template_folder="Templates",static_folder="Static")
-app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:////home/rohit/Downloads/MAD II Project/database.sqlite3"
+app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///C:/Users/yayar/Desktop/Documents/IITM/MAD II Project/Project/Code/database.sqlite3"
 app.config['CACHE_TYPE']='RedisCache'
 app.config['CACHE_REDIS_HOST']='localhost'
 app.config['CACHE_REDIS_PORT']=6379
+redis=FlaskRedis(app)
 db=SQLAlchemy()
 db.init_app(app)
 api=Api(app)
@@ -32,8 +35,6 @@ celery=workers.celery
 celery.conf.update(broker_url="redis://localhost:6379/1",result_backend="redis://localhost:6379/2",broker_connection_retry_on_startup=True, timezone="Asia/Kolkata")
 celery.Task=workers.ContextTask
 celery.conf.beat_schedule={'Daily Report':{'task':'Daily','schedule':crontab(hour=11,minute=2)},'Monthly Activity Report':{'task':'Monthly','schedule':crontab(day_of_month=1, hour=2)}}
-
-
 
 #Models
 
@@ -124,7 +125,6 @@ def Download():
     job=CSV.apply_async()
     result=job.wait()
     return send_file('Static/Issued_History.csv')
-
 
 #API
 
@@ -231,6 +231,7 @@ class BooksAPI(Resource):
         data=Book(Name=title,Author=author,SID=SID)
         db.session.add(data)
         db.session.commit()
+        redis.delete('flask_cache_all_books')
         return "",201
     def put(self,id,title,author,sid):
         data=db.session.query(Book).filter_by(ID=id).first()
@@ -238,11 +239,13 @@ class BooksAPI(Resource):
         data.Author=author
         data.SID=sid
         db.session.commit()
+        redis.delete('flask_cache_all_books')
         return "",200
     def delete(self,id):
         data=db.session.query(Book).filter_by(ID=id).first()
         db.session.delete(data)
         db.session.commit()
+        redis.delete('flask_cache_all_books')
         return "",204
 api.add_resource(BooksAPI,'/api/books/<id>','/api/books/<title>/<author>/<SID>','/api/books/<id>/<title>/<author>/<sid>')
 
@@ -259,6 +262,7 @@ class SectionAPI(Resource):
         data=Section(Name=name,Desc=desc)
         db.session.add(data)
         db.session.commit()
+        redis.delete('flask_cache_all_sections')
         return "",201
     
     
@@ -277,12 +281,14 @@ class SectionsAPI(Resource):
         data.Name=title
         data.Desc=desc
         db.session.commit()
+        redis.delete('flask_cache_all_sections')
         return "",200
 
     def delete(self,id):
         data=db.session.query(Section).filter_by(ID=id).first()
         db.session.delete(data)
         db.session.commit()
+        redis.delete('flask_cache_all_sections')
         return "",204
 api.add_resource(SectionsAPI,'/api/sections','/api/sections/<id>','/api/sections/<title>/<desc>/<SID>')
 
@@ -308,17 +314,12 @@ api.add_resource(RequestsAPI,'/api/requests')
 
 #Cached Data
 
-@cache.cached(timeout=60, key_prefix='all_books')
+@cache.cached(timeout=0, key_prefix='all_books')
 def all_books():
     books=Book.query.all()
     return books
 
-@cache.cached(timeout=60, key_prefix='all_issued')
-def all_issued():
-    data=Issued.query.all()
-    return data
-
-@cache.cached(timeout=60, key_prefix='all_sections')
+@cache.cached(timeout=0, key_prefix='all_sections')
 def all_sections():
     data=Section.query.all()
     return data
@@ -328,7 +329,7 @@ def all_sections():
 
 @celery.task(name="Daily")
 def Daily_Reminder():
-    data=all_issued()
+    data=Issued.query.all()
     mails=[]
     for issue in data:
         if issue.DOR==str(date.today()):
@@ -372,7 +373,7 @@ def Activity_Report():
 
 @celery.task(name="CSV")
 def CSV():
-    data=all_issued()
+    data=Issued.query.all()
     with open ('Static/Issued_History.csv','w') as f:
         csvw=csv.writer(f)
         csvw.writerow(['BID','UID','Status','DOI','DOR'])
