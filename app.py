@@ -1,25 +1,40 @@
+#Libraries
 from flask import Flask
 from flask import render_template
-from flask import request
 from flask import redirect
-from flask import make_response
+from flask import send_file
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import or_
-from datetime import date,timedelta
+from jinja2 import Template
+from datetime import date,timedelta,datetime
 from flask_restful import Api, Resource,reqparse
-#import workers
-import tasks
-import os
+from flask_caching import Cache
+import workers
+from workers import celery
+from celery.schedules import crontab
+import csv
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
-app=Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///C:/Users/yayar/Desktop/Documents/IITM/MAD II Project/database.sqlite3"
+#Configuration
+
+app=Flask(__name__,template_folder="Templates",static_folder="Static")
+app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:////home/rohit/Downloads/MAD II Project/database.sqlite3"
+app.config['CACHE_TYPE']='RedisCache'
+app.config['CACHE_REDIS_HOST']='localhost'
+app.config['CACHE_REDIS_PORT']=6379
 db=SQLAlchemy()
 db.init_app(app)
 api=Api(app)
+cache=Cache(app)
 app.app_context().push()
-#celery=workers.celery
-#celery.conf.update(broker_url="redis://localhost:6379/1",result_backend="redis://localhost:6379/2",broker_connection_retry_on_startup=True)
-#celery.Task=workers.ContextTask
+celery=workers.celery
+celery.conf.update(broker_url="redis://localhost:6379/1",result_backend="redis://localhost:6379/2",broker_connection_retry_on_startup=True, timezone="Asia/Kolkata")
+celery.Task=workers.ContextTask
+celery.conf.beat_schedule={'Daily Report':{'task':'Daily','schedule':crontab(hour=11,minute=2)},'Monthly Activity Report':{'task':'Monthly','schedule':crontab(day_of_month=1, hour=2)}}
+
+
+
 #Models
 
 class Book(db.Model):
@@ -104,12 +119,11 @@ def edit_book(id):
 def edit_section(id):
     return render_template("Edit_Section.html")
 
-@app.route('/hello/<name>')
-def tell_hello(name):
-
-    job=tasks.hello.delay(name)
+@app.route('/admin/download')
+def Download():
+    job=CSV.apply_async()
     result=job.wait()
-    return str(job),200
+    return send_file('Static/Issued_History.csv')
 
 
 #API
@@ -206,8 +220,7 @@ api.add_resource(BookAPI,'/api/book/<id>')
 
 class BooksAPI(Resource):
     def get(self,id):
-        books=Book.query.all()
-
+        books=all_books()
         for i in books:
             i.SID=Section.query.filter_by(ID=i.SID).first().Name
         bookst=[]
@@ -218,7 +231,6 @@ class BooksAPI(Resource):
         data=Book(Name=title,Author=author,SID=SID)
         db.session.add(data)
         db.session.commit()
-        print(title,author,SID)
         return "",201
     def put(self,id,title,author,sid):
         data=db.session.query(Book).filter_by(ID=id).first()
@@ -254,7 +266,7 @@ api.add_resource(SectionAPI,'/api/section/<id>','/api/section/<name>/<desc>')
 
 class SectionsAPI(Resource):
     def get(self):
-        data=Section.query.all()
+        data=all_sections()
         sections=[]
         for i in data:
             sections.append({"Name":i.Name,"Desc":i.Desc,"ID":i.ID})
@@ -294,28 +306,92 @@ class RequestsAPI(Resource):
         return {"requests":requests}
 api.add_resource(RequestsAPI,'/api/requests')
 
+#Cached Data
+
+@cache.cached(timeout=60, key_prefix='all_books')
+def all_books():
+    books=Book.query.all()
+    return books
+
+@cache.cached(timeout=60, key_prefix='all_issued')
+def all_issued():
+    data=Issued.query.all()
+    return data
+
+@cache.cached(timeout=60, key_prefix='all_sections')
+def all_sections():
+    data=Section.query.all()
+    return data
+
 
 #Tasks
 
-#@celery.task()
+@celery.task(name="Daily")
 def Daily_Reminder():
-    data=Issued.query.all()
+    data=all_issued()
+    mails=[]
     for issue in data:
         if issue.DOR==str(date.today()):
             email=Users.query.filter_by(ID=issue.UID).first().Email
             book=Book.query.filter_by(ID=issue.BID).first().Name
-            print(email,book)
+            mails.append((email,book))
+    if mails:
+        for mail in mails:
+            with open('Templates/Return_Reminder.html') as f:
+                template=Template(f.read())
+                message=template.render(book=mail[1],date=date.today())
+            Send_Mail(mail[0],'REMINDER: Book Return Due Today',message)
+    
 
-#@celery.task()
+@celery.task(name="Monthly")
 def Activity_Report():
-    pass
+    month=datetime.now().month-1
+    year=datetime.now().year
+    start_date = str(date(year, month, 1))
+    end_date = str(date(year, month + 1, 1)) if month < 12 else str(date(year + 1, 1, 1))
+    dat=str((date.today()-timedelta(days=1)).strftime("%B"))+' '+str(year)
+    books=Issued.query.filter(Issued.DOI>=start_date, Issued.DOI<end_date).all()
+    books_issued=len(books)
+    d={}
+    for i in books:
+        sid=Book.query.filter_by(ID=i.BID).first().SID
+        sname=Section.query.filter_by(ID=sid).first().Name
+        if sname not in d:
+            d[sname]=1
+        else:
+            d[sname]+=1
+    section=[]
+    for i in d:
+        section.append({'Name':i,'Number':d[i],'Percent':d[i]*100/books_issued})
+    users=db.session.query(Issued.UID).filter(Issued.DOI>=start_date, Issued.DOI<end_date).distinct().count()
 
-#@celery.task()
-def Issue():
-    pass
+    with open('Templates/Monthly_Report.html') as f:
+                template=Template(f.read())
+                message=template.render(Month=dat,books_issued=books_issued,section=section,active_users=users)
+    Send_Mail('ldv2@mail.com','Monthly Activity Report',message)
 
+@celery.task(name="CSV")
+def CSV():
+    data=all_issued()
+    with open ('Static/Issued_History.csv','w') as f:
+        csvw=csv.writer(f)
+        csvw.writerow(['BID','UID','Status','DOI','DOR'])
+        for issue in data:
+            csvw.writerow([issue.BID,issue.UID,issue.Status,issue.DOI,issue.DOR])
+
+def Send_Mail(to,sub,message):
+    msg=MIMEMultipart()
+    msg['From']="LDv2@mail.com"
+    msg['To']=to
+    msg['Subject']=sub
+
+    msg.attach(MIMEText(message,'html'))
+
+    s=smtplib.SMTP(host='localhost',port=1025)
+    s.login('ldv2@mail.com','')
+    s.send_message(msg)
+    s.quit()
 
 
 if __name__=='__main__':
-    #app.run(debug=True)
-    Daily_Reminder()
+    app.run(debug=True)
