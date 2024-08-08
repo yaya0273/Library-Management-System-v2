@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monthly Librarian Report</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootswatch/4.5.2/darkly/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-dark text-light">
+    <div class="container mt-5">
+        <div class="text-center mb-4">
+            <h1>Monthly Activity Report</h1>
+            <h2>{{Month}}</h2>
+        </div>
+
+        <div class="card bg-secondary text-white mb-4">
+            <div class="card-header">
+                <h2 class="h5 mb-0">Number of Books Issued</h2>
+            </div>
+            <div class="card-body">
+                <p class="lead">Total Books Issued: <strong>{{books_issued}}</strong></p>
+            </div>
+        </div>
+
+        <div class="card bg-secondary text-white mb-4">
+            <div class="card-header">
+                <h2 class="h5 mb-0">Percentage of Books Issued by Section</h2>
+            </div>
+            <div class="card-body">
+                <table class="table table-bordered table-striped table-dark">
+                    <thead>
+                        <tr>
+                            <th>Section</th>
+                            <th>Number of Books Issued</th>
+                            <th>Percentage</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for i in section %}
+                        <tr>
+                            <td>{{i["Name"]}}</td>
+                            <td>{{i["Number"]}}</td>
+                            <td>{{i["Percent"]}}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card bg-secondary text-white mb-4">
+            <div class="card-header">
+                <h2 class="h5 mb-0">Number of Active Users</h2>
+            </div>
+            <div class="card-body">
+                <p class="lead">Total Active Users: <strong>{{active_users}}</strong></p>
+            </div>
+        </div>
+
+
+        <div class="text-center mt-4">
+            <p class="mb-0">Report generated on: {{date}}</p>
+        </div>
+    </div>
+</body>
+</html>
