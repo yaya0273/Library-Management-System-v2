@@ -34,7 +34,7 @@ app.app_context().push()
 celery=workers.celery
 celery.conf.update(broker_url="redis://localhost:6379/1",result_backend="redis://localhost:6379/2",broker_connection_retry_on_startup=True, timezone="Asia/Kolkata")
 celery.Task=workers.ContextTask
-celery.conf.beat_schedule={'Daily Report':{'task':'Daily','schedule':crontab(hour=11,minute=2)},'Monthly Activity Report':{'task':'Monthly','schedule':crontab(day_of_month=1, hour=2)}}
+celery.conf.beat_schedule={'Daily Report':{'task':'Daily','schedule':crontab(hour=17)},'Monthly Activity Report':{'task':'Monthly','schedule':crontab(day_of_month=1, hour=2)}}
 
 #Models
 
